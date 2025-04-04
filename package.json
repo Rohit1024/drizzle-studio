@@ -1,0 +1,32 @@
+{
+  "name": "drizzle-studio",
+  "version": "1.0.0",
+  "description": "Run Drizzle Studion on Cloud Run",
+  "main": "proxy.js",
+  "scripts": {
+    "build": "tsc",
+    "db:push": "dotenv drizzle-kit push",
+    "db:generate": "dotenv drizzle-kit generate",
+    "db:migrate": "dotenv drizzle-kit migrate",
+    "db:studio": "dotenv drizzle-kit studio",
+    "start": "node proxy.js"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "module",
+  "dependencies": {
+    "dotenv": "^16.4.7",
+    "drizzle-orm": "^0.41.0",
+    "express": "^5.1.0",
+    "http-proxy-middleware": "^3.0.3",
+    "pg": "^8.14.1"
+  },
+  "devDependencies": {
+    "@types/node": "^22.14.0",
+    "@types/pg": "^8.11.11",
+    "drizzle-kit": "^0.30.6",
+    "drizzle-zod": "^0.7.1",
+    "typescript": "^5.8.2"
+  }
+}

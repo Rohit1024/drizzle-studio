@@ -1,0 +1,55 @@
+# Use a suitable Node.js base image :
+
+FROM node:18-slim
+
+
+
+WORKDIR /app
+
+
+
+# Install OpenSSL (good practice for potential SSL DB connections)
+
+RUN apt-get update -y && apt-get install -y openssl
+
+
+
+# Copy package.json and package-lock.json (or yarn.lock)
+
+COPY package*.json ./
+
+
+
+# Install dependencies, including drizzle-kit
+
+RUN npm install
+
+
+
+# Copy Drizzle configuration, schema, and the output directory
+
+# Drizzle Studio might need access to the config and schema at runtime
+
+COPY drizzle.config.ts ./
+
+COPY src/ ./src/
+
+
+
+# Create a startup script for Drizzle Studio with better error handling
+
+RUN echo '#!/bin/bash\n\
+
+echo "Starting Drizzle Studio..."\n\
+
+# Start Drizzle Studio\n\
+
+npx drizzle-kit studio --port 8080 --host 0.0.0.0\n\
+
+' > /app/start.sh && chmod +x /app/start.sh
+
+
+
+# Expose the port Drizzle Studio runs on
+
+EXPOSE 8080
