@@ -14,7 +14,6 @@ steps:
     args:
       - '-c'
       - |
-
         # Disable SSL certificate validation (use with caution)
         export NODE_TLS_REJECT_UNAUTHORIZED=0
         
@@ -26,15 +25,16 @@ steps:
         echo "Using DATABASE_URL (password hidden): ${_DB_PROVIDER}://${_DB_USER}:***@${_CLOUD_SQL_PRIVATE_IP}:${_DB_PORT}/${_DB_NAME}?schema=public&sslmode=require"
 
         # Generate migration SQL files based on schema changes
-        # This compares ./src/schema.ts with the state recorded in drizzle/meta/_journal.json
-        # It does NOT connect to the database.
         echo "Generating Drizzle migration files..."
         npx drizzle-kit generate --dialect=postgresql --schema=./src/schema.ts
-
+      
         # Apply migrations to the database
-        # This connects to the DATABASE_URL and runs SQL files from the ./drizzle directory
         echo "Applying Drizzle migrations..."
-        npx drizzle-kit push --config=drizzle.config.ts
+        npx tsx migrate.ts
+      
+        # Seed the database
+        echo "Seeding the database..."
+        npx tsx seed.ts
 
         echo "Drizzle operations completed successfully."
     secretEnv: ['DB_PASSWORD']
@@ -43,39 +43,44 @@ steps:
       - name: 'node_modules'
         path: /app/node_modules
 
-  # Step 3: Build the Docker image for Drizzle Studio
+  # Step 3: Get the cached image
+  - name: 'gcr.io/cloud-builders/docker'
+    id: 'GetCachedImage'
+    entrypoint: 'bash'
+    args: ['-c', 'gcr.io/${PROJECT_ID}/drizzle-studio:latest || exit 0']
+
+  # Step 4: Build the Docker image for Drizzle Studio
   - name: 'gcr.io/cloud-builders/docker'
     id: 'BuildImage'
     args: ['build', '-t', 'gcr.io/${PROJECT_ID}/drizzle-studio:latest', '--cache-from', 'gcr.io/${PROJECT_ID}/drizzle-studio:latest', '.']
-    waitFor: ['DrizzleOperations'] # Wait for migrations to complete
+    waitFor: ['DrizzleOperations', 'GetCachedImage'] # Wait for migrations and cached image to complete
 
-  # Step 4: Push the Docker image to Container Registry
+  # Step 5: Push the Docker image to Container Registry
   - name: 'gcr.io/cloud-builders/docker'
     id: 'PushImage'
     args: ['push', 'gcr.io/${PROJECT_ID}/drizzle-studio:latest']
     waitFor: ['BuildImage']
 
-  # Step 5: Deploy to Cloud Run
+  # Step 6: Deploy to Cloud Run
   - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
     id: 'DeployToCloudRun'
-    entrypoint: 'bash'
+    entrypoint: 'gcloud'
     args:
-    - '-c'
-    - |
-      gcloud run deploy drizzle-studio \
-        --image=gcr.io/${PROJECT_ID}/drizzle-studio:latest \
-        --region=${_REGION} \
-        --platform=managed \
-        --allow-unauthenticated \
-        --cpu=1 \
-        --memory=512Mi \
-        --min-instances=0 \
-        --max-instances=1 \
-        # Set the DATABASE_URL env var for the running Drizzle Studio container
-        --set-env-vars="DATABASE_URL=${_DB_PROVIDER}://${_DB_USER}:$$DB_PASSWORD@${_CLOUD_SQL_PRIVATE_IP}:${_DB_PORT}/${_DB_NAME}?schema=public&sslmode=require" \
-        --network=${_NETWORK} \
-        --subnet=${_SUBNET} \
-        --vpc-egress=${_VPC_EGRESS} # Needed to reach the private IP of Cloud SQL
+      - 'run'
+      - 'deploy'
+      - 'drizzle-studio'
+      - '--image=gcr.io/${PROJECT_ID}/drizzle-studio:latest'
+      - '--region=${_REGION}'
+      - '--platform=managed'
+      - '--allow-unauthenticated'
+      - '--cpu=1'
+      - '--memory=512Mi'
+      - '--min-instances=0'
+      - '--max-instances=1'
+      - '--set-env-vars=DATABASE_URL=${_DB_PROVIDER}://${_DB_USER}:$$DB_PASSWORD@${_CLOUD_SQL_PRIVATE_IP}:${_DB_PORT}/${_DB_NAME}?schema=public&sslmode=require'
+      - '--network=${_NETWORK}'
+      - '--subnet=${_SUBNET}'
+      - '--vpc-egress=${_VPC_EGRESS}'
     secretEnv: ['DB_PASSWORD']
     waitFor: ['PushImage']
 

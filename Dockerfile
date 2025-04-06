@@ -12,9 +12,6 @@ COPY package*.json ./
 # Install dependencies
 RUN npm install
 
-# Copy the proxy server script
-COPY proxy.js ./
-
 # Copy Drizzle configuration and schema
 COPY drizzle.config.ts ./
 COPY src/ ./src/
@@ -22,5 +19,5 @@ COPY src/ ./src/
 # Expose the port that Cloud Run will use
 EXPOSE 8080
 
-# Start the proxy server
-CMD ["node", "proxy.js"]
+# Run Drizzle Studio
+CMD ["npx", "drizzle-kit", "studio", "--port", "8080", "--host", "0.0.0.0"]
